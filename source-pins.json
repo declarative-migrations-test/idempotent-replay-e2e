@@ -3,7 +3,7 @@
   "sources": {
     "declarative-migrations/declarative-postgres-migrate.rs": {
       "branch": "agent/formal-borrow-checked-migrations",
-      "sha": "5fd4057602481866662f9cbb8dea6677403bfa82",
+      "sha": "ff9f8ebdc0dbbd5b11ac6eebcc04393ba2b301f1",
       "exists": true
     }
   }
