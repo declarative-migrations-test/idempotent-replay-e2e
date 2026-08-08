@@ -1,0 +1,74 @@
+name: rust idempotent replay certification
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 8 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: idempotent-replay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out certification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: certification
+          persist-credentials: false
+          show-progress: false
+      - name: Check out the exact product head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: declarative-migrations/declarative-postgres-migrate.rs
+          ref: 5fd4057602481866662f9cbb8dea6677403bfa82
+          path: upstream
+          persist-credentials: false
+          show-progress: false
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: upstream -> target
+      - name: Validate generated test contract
+        working-directory: certification
+        run: node scripts/validate-plan.mjs
+      - name: Install the Rust replay witness
+        run: |
+          rustfmt --edition 2021 --check certification/tests/idempotent_replay_cert.rs
+          cp certification/tests/idempotent_replay_cert.rs upstream/tests/idempotent_replay_cert.rs
+      - name: Strictly lint the replay witness
+        working-directory: upstream
+        run: cargo clippy --locked --test idempotent_replay_cert -- -D warnings
+      - name: Prove rollback, resume, replay, and ledger consistency
+        working-directory: upstream
+        env:
+          DPM_TEST_DATABASE_URL: postgres://postgres@localhost:5432/postgres
+          RUST_BACKTRACE: "1"
+        run: >-
+          cargo test --locked --test idempotent_replay_cert --
+          --test-threads=1 --nocapture
