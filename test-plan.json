@@ -5,33 +5,48 @@
   "testOrganization": "declarative-migrations-test",
   "repository": "idempotent-replay-e2e",
   "profile": "migration-e2e",
-  "description": "apply twice; rollback twice; resume; migration ledger consistency",
+  "description": "Rust exact-head certification for apply-twice, rollback-twice, resume, and migration-ledger consistency",
   "focus": [
-    "apply twice",
-    "rollback twice",
-    "resume",
-    "migration ledger consistency"
+    "borrow-checked lease collision and release",
+    "two failed transactional migration attempts",
+    "rollback leaves the ledger unchanged",
+    "resume after failure",
+    "identical replay is idempotent",
+    "migration ledger cardinality and checksum consistency",
+    "PostgreSQL 16 and 17"
   ],
-  "services": [],
-  "matrix": {},
+  "services": [
+    "postgresql"
+  ],
+  "matrix": {
+    "postgres": [
+      "16",
+      "17"
+    ]
+  },
   "requiredChecks": [
-    "plan",
-    "apply",
-    "rollback",
-    "crash-recovery",
-    "schema-drift",
+    "generated-contract",
+    "rustfmt",
+    "clippy",
+    "lease-exclusion",
+    "rollback-twice",
+    "resume",
+    "idempotent-replay",
+    "ledger-consistency",
     "version-matrix"
   ],
   "sources": [
     {
       "fullName": "declarative-migrations/declarative-postgres-migrate.rs",
       "exists": true,
-      "branch": "main",
-      "sha": "21eb846e356b2a5aff068b21e77903e6cca50452",
+      "branch": "agent/formal-borrow-checked-migrations",
+      "sha": "ff9f8ebdc0dbbd5b11ac6eebcc04393ba2b301f1",
       "visibility": "public"
     }
   ],
-  "sourceGates": [],
+  "sourceGates": [
+    "product PR #30 exact head"
+  ],
   "imports": [],
   "security": {
     "immutableSourcePins": true,
