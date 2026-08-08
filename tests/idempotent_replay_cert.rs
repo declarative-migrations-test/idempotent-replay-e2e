@@ -49,7 +49,10 @@ async fn rollback_twice_then_resume_and_replay_are_consistent() -> Result<()> {
     let key = test_lock_key();
     let mut lease = PostgresMigrationLease::acquire(&url, key, "idempotent-owner-a").await?;
     let collision = PostgresMigrationLease::acquire(&url, key, "idempotent-owner-b").await;
-    assert!(collision.is_err(), "a second owner acquired the active lease");
+    assert!(
+        collision.is_err(),
+        "a second owner acquired the active lease"
+    );
 
     let setup = ValidatedScript::parse(
         r#"CREATE TABLE dpm_replay_ledger (
