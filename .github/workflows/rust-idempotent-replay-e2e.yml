@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: declarative-migrations/declarative-postgres-migrate.rs
-          ref: 5fd4057602481866662f9cbb8dea6677403bfa82
+          ref: ff9f8ebdc0dbbd5b11ac6eebcc04393ba2b301f1
           path: upstream
           persist-credentials: false
           show-progress: false
