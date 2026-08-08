@@ -39,13 +39,13 @@
     {
       "fullName": "declarative-migrations/declarative-postgres-migrate.rs",
       "exists": true,
-      "branch": "agent/formal-borrow-checked-migrations",
-      "sha": "ff9f8ebdc0dbbd5b11ac6eebcc04393ba2b301f1",
+      "branch": "main",
+      "sha": "ff90a32bfddd09e22ab270b7a2e6f6deb7ac8304",
       "visibility": "public"
     }
   ],
   "sourceGates": [
-    "product PR #30 exact head"
+    "product main merge ff90a32bfddd09e22ab270b7a2e6f6deb7ac8304"
   ],
   "imports": [],
   "security": {
