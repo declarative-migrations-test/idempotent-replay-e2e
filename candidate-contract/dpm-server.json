@@ -1,0 +1,13 @@
+{
+  "repository": "declarative-migrations/declarative-postgres-migrate.rs",
+  "sha": "7759c6ed97456e179087451caebcb0e9566c20c6",
+  "source_pr": 12,
+  "purpose": "separate exact-head server evidence from pull-request merge-ref integration failures",
+  "merge_policy": "rebuild the server contract on current main; do not merge or force-push the stale source branch wholesale",
+  "required_slices": [
+    "versioned HTTP and OpenAPI contract",
+    "alias-only database targeting and bearer-token boundary",
+    "dry-run and explicit destructive-apply confirmation",
+    "bounded body size, concurrency, request IDs, and process smoke tests"
+  ]
+}
