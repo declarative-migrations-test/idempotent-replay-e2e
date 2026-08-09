@@ -49,7 +49,7 @@ runs:
         test -z "$(git status --porcelain)"
 
     - name: Generate execution-only fresh dependency resolution
-      if: inputs.fresh-resolution == 'true'
+      if: ${{ inputs['fresh-resolution'] == 'true' }}
       shell: bash
       working-directory: candidate
       run: bash ../candidate-contract/prepare-fresh-resolution.sh
