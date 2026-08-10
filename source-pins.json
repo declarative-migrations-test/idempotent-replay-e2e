@@ -3,7 +3,7 @@
   "sources": {
     "declarative-migrations/declarative-postgres-migrate.rs": {
       "branch": "main",
-      "sha": "c1e0d15c08d55d52909b6eb2b2d5290529ce0114",
+      "sha": "ff90a32bfddd09e22ab270b7a2e6f6deb7ac8304",
       "exists": true
     }
   }
