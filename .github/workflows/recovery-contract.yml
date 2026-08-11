@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - recovery-contract.json
+      - source-pins.json
+      - test-plan.json
       - scripts/validate-recovery-contract.mjs
       - scripts/validate-recovery-contract.test.mjs
       - .github/workflows/recovery-contract.yml
@@ -11,6 +13,8 @@ on:
     branches: [main]
     paths:
       - recovery-contract.json
+      - source-pins.json
+      - test-plan.json
       - scripts/validate-recovery-contract.mjs
       - scripts/validate-recovery-contract.test.mjs
       - .github/workflows/recovery-contract.yml

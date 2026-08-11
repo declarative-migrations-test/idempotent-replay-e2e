@@ -16,10 +16,82 @@ const REQUIRED_CASES = new Set([
 const REQUIRED_EVIDENCE = new Set([
   'attemptId',
   'migrationId',
+  'engine',
+  'engineVersion',
+  'exactSourceSha',
+  'planDigest',
+  'injectedFaultPoint',
+  'lockTransitions',
+  'finalSchemaDigest',
   'planChecksum',
   'leaseKey',
   'leaseOwner',
   'decision',
+]);
+const CASE_CONTRACTS = new Map([
+  ['crash-after-lock', {
+    category: 'crash',
+    injectionPoint: 'after-lock-acquire',
+    initialState: { ledgerRows: 0, lock: 'owned', checksum: 'absent' },
+    expected: {
+      decision: 'resume', exit: 'retryable-failure', ledgerRows: 0,
+      mayExecuteSql: true, requiresOwnershipProof: true,
+    },
+  }],
+  ['crash-after-statement-before-ledger', {
+    category: 'crash',
+    injectionPoint: 'after-statement-before-ledger',
+    initialState: { ledgerRows: 0, lock: 'owned', checksum: 'absent' },
+    expected: {
+      decision: 'resume', exit: 'retryable-failure', ledgerRows: 0,
+      mayExecuteSql: true, requiresOwnershipProof: true,
+    },
+  }],
+  ['crash-after-ledger-before-ack', {
+    category: 'crash',
+    injectionPoint: 'after-ledger-before-ack',
+    initialState: { ledgerRows: 1, lock: 'owned', checksum: 'matching' },
+    expected: {
+      decision: 'no-op', exit: 'success', ledgerRows: 1,
+      mayExecuteSql: false, requiresOwnershipProof: true,
+    },
+  }],
+  ['foreign-active-lock', {
+    category: 'lock',
+    injectionPoint: 'lease-acquire',
+    initialState: { ledgerRows: 0, lock: 'foreign-active', checksum: 'absent' },
+    expected: {
+      decision: 'refuse', exit: 'retryable-failure', ledgerRows: 0,
+      mayExecuteSql: false, requiresOwnershipProof: true,
+    },
+  }],
+  ['ambiguous-expired-lock', {
+    category: 'lock',
+    injectionPoint: 'lease-recovery',
+    initialState: { ledgerRows: 0, lock: 'ambiguous-expired', checksum: 'absent' },
+    expected: {
+      decision: 'refuse', exit: 'terminal-failure', ledgerRows: 0,
+      mayExecuteSql: false, requiresOwnershipProof: true,
+    },
+  }],
+  ['checksum-drift', {
+    category: 'drift',
+    injectionPoint: 'preflight',
+    initialState: { ledgerRows: 1, lock: 'owned', checksum: 'mismatched' },
+    expected: {
+      decision: 'refuse', exit: 'terminal-failure', ledgerRows: 1,
+      mayExecuteSql: false, requiresOwnershipProof: true,
+    },
+  }],
+  ['identical-replay', {
+    category: 'replay',
+    injectionPoint: 'preflight',
+    initialState: { ledgerRows: 1, lock: 'owned', checksum: 'matching' },
+    expected: {
+      decision: 'no-op', exit: 'success', ledgerRows: 1,
+      mayExecuteSql: false, requiresOwnershipProof: true,
+    },
+  }],
 ]);
 const TOP_LEVEL_KEYS = new Set([
   'schemaVersion',
@@ -50,7 +122,18 @@ function unknownKeys(value, allowed, label, errors) {
 }
 
 function exactSet(values, expected) {
-  return Array.isArray(values) && values.length === expected.size && values.every((value) => expected.has(value));
+  return Array.isArray(values)
+    && values.length === expected.size
+    && new Set(values).size === expected.size
+    && values.every((value) => typeof value === 'string' && expected.has(value));
+}
+
+function enforceExactFields(actual, required, label, errors) {
+  for (const [field, expected] of Object.entries(required)) {
+    if (actual?.[field] !== expected) {
+      errors.push(`${label}.${field} must be ${JSON.stringify(expected)}`);
+    }
+  }
 }
 
 export function validateRecoveryContract(contract) {
@@ -144,6 +227,16 @@ export function validateRecoveryContract(contract) {
       errors.push(`${label}.expected.evidence must contain every canonical evidence field exactly`);
     }
 
+    const required = CASE_CONTRACTS.get(testCase.id);
+    if (required) {
+      enforceExactFields(testCase, {
+        category: required.category,
+        injectionPoint: required.injectionPoint,
+      }, label, errors);
+      enforceExactFields(state, required.initialState, `${label}.initialState`, errors);
+      enforceExactFields(expected, required.expected, `${label}.expected`, errors);
+    }
+
     if (expected.decision === 'refuse' && expected.mayExecuteSql !== false) {
       errors.push(`${label} refuses but still permits SQL execution`);
     }
@@ -186,11 +279,37 @@ export function validateRecoveryContract(contract) {
   return errors;
 }
 
+export function validateRecoveryBundle(contract, sourcePins, testPlan) {
+  const errors = validateRecoveryContract(contract);
+  const repository = contract?.source?.repository;
+  const pinnedSha = sourcePins?.sources?.[repository]?.sha;
+  const plannedSource = Array.isArray(testPlan?.sources)
+    ? testPlan.sources.find((source) => source?.fullName === repository)
+    : undefined;
+  if (!/^[0-9a-f]{40}$/.test(pinnedSha ?? '')) {
+    errors.push('source-pins.json must contain the certified immutable source SHA');
+  } else if (contract?.source?.sha !== pinnedSha) {
+    errors.push('contract source SHA must match source-pins.json');
+  }
+  if (!/^[0-9a-f]{40}$/.test(plannedSource?.sha ?? '')) {
+    errors.push('test-plan.json must contain the certified immutable source SHA');
+  } else if (contract?.source?.sha !== plannedSource.sha) {
+    errors.push('contract source SHA must match test-plan.json');
+  }
+  return errors;
+}
+
 export function main() {
   const contract = JSON.parse(
     fs.readFileSync(new URL('../recovery-contract.json', import.meta.url), 'utf8'),
   );
-  const errors = validateRecoveryContract(contract);
+  const sourcePins = JSON.parse(
+    fs.readFileSync(new URL('../source-pins.json', import.meta.url), 'utf8'),
+  );
+  const testPlan = JSON.parse(
+    fs.readFileSync(new URL('../test-plan.json', import.meta.url), 'utf8'),
+  );
+  const errors = validateRecoveryBundle(contract, sourcePins, testPlan);
   if (errors.length) {
     for (const error of errors) console.error(`error: ${error}`);
     process.exitCode = 1;

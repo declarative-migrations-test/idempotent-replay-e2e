@@ -8,6 +8,13 @@
   "requiredEvidence": [
     "attemptId",
     "migrationId",
+    "engine",
+    "engineVersion",
+    "exactSourceSha",
+    "planDigest",
+    "injectedFaultPoint",
+    "lockTransitions",
+    "finalSchemaDigest",
     "planChecksum",
     "leaseKey",
     "leaseOwner",
@@ -25,7 +32,11 @@
         "ledgerRows": 0,
         "mayExecuteSql": true,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -39,7 +50,11 @@
         "ledgerRows": 0,
         "mayExecuteSql": true,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -53,7 +68,11 @@
         "ledgerRows": 1,
         "mayExecuteSql": false,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -67,7 +86,11 @@
         "ledgerRows": 0,
         "mayExecuteSql": false,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -81,7 +104,11 @@
         "ledgerRows": 0,
         "mayExecuteSql": false,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -95,7 +122,11 @@
         "ledgerRows": 1,
         "mayExecuteSql": false,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     },
     {
@@ -109,7 +140,11 @@
         "ledgerRows": 1,
         "mayExecuteSql": false,
         "requiresOwnershipProof": true,
-        "evidence": ["attemptId", "migrationId", "planChecksum", "leaseKey", "leaseOwner", "decision"]
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
       }
     }
   ]

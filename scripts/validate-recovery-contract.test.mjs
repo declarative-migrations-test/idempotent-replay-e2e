@@ -2,10 +2,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { validateRecoveryContract } from './validate-recovery-contract.mjs';
+import {
+  validateRecoveryBundle,
+  validateRecoveryContract,
+} from './validate-recovery-contract.mjs';
 
 function contract() {
   return JSON.parse(fs.readFileSync(new URL('../recovery-contract.json', import.meta.url), 'utf8'));
+}
+
+function sourcePins() {
+  return JSON.parse(fs.readFileSync(new URL('../source-pins.json', import.meta.url), 'utf8'));
+}
+
+function testPlan() {
+  return JSON.parse(fs.readFileSync(new URL('../test-plan.json', import.meta.url), 'utf8'));
 }
 
 function caseById(value, id) {
@@ -13,7 +24,7 @@ function caseById(value, id) {
 }
 
 test('canonical recovery matrix is complete and deterministic', () => {
-  assert.deepEqual(validateRecoveryContract(contract()), []);
+  assert.deepEqual(validateRecoveryBundle(contract(), sourcePins(), testPlan()), []);
 });
 
 test('checksum drift can never apply or retry SQL', () => {
@@ -41,6 +52,57 @@ test('missing and duplicate recovery cases are rejected', () => {
   const duplicate = contract();
   duplicate.cases.push({ ...duplicate.cases[0] });
   assert.match(validateRecoveryContract(duplicate).join('\n'), /duplicate case id crash-after-lock/);
+});
+
+test('set-valued fields reject duplicates that hide required values', () => {
+  const duplicateVersion = contract();
+  duplicateVersion.databaseMatrix = ['16', '16'];
+  assert.match(validateRecoveryContract(duplicateVersion).join('\n'), /PostgreSQL 16 and 17 exactly/);
+
+  const duplicateEvidence = contract();
+  duplicateEvidence.requiredEvidence = duplicateEvidence.requiredEvidence.map(() => 'attemptId');
+  assert.match(validateRecoveryContract(duplicateEvidence).join('\n'), /canonical evidence fields exactly/);
+});
+
+test('case identifiers cannot be paired with permissive or swapped semantics', () => {
+  const value = contract();
+  const crash = caseById(value, 'crash-after-lock');
+  crash.injectionPoint = 'preflight';
+  crash.expected.requiresOwnershipProof = false;
+  crash.expected.ledgerRows = 1;
+  const errors = validateRecoveryContract(value).join('\n');
+  assert.match(errors, /injectionPoint must be "after-lock-acquire"/);
+  assert.match(errors, /requiresOwnershipProof must be true/);
+  assert.match(errors, /ledgerRows must be 0/);
+});
+
+test('acceptance evidence is mandatory for every recovery decision', () => {
+  const value = contract();
+  value.requiredEvidence = value.requiredEvidence.filter((field) => field !== 'finalSchemaDigest');
+  caseById(value, 'identical-replay').expected.evidence =
+    caseById(value, 'identical-replay').expected.evidence.filter(
+      (field) => field !== 'lockTransitions',
+    );
+  const errors = validateRecoveryContract(value).join('\n');
+  assert.match(errors, /canonical evidence fields exactly/);
+  assert.match(errors, /every canonical evidence field exactly/);
+});
+
+test('contract source SHA cannot drift from either generated source pin', () => {
+  const pins = sourcePins();
+  pins.sources['declarative-migrations/declarative-postgres-migrate.rs'].sha =
+    '1111111111111111111111111111111111111111';
+  assert.match(
+    validateRecoveryBundle(contract(), pins, testPlan()).join('\n'),
+    /contract source SHA must match source-pins.json/,
+  );
+
+  const plan = testPlan();
+  plan.sources[0].sha = '2222222222222222222222222222222222222222';
+  assert.match(
+    validateRecoveryBundle(contract(), sourcePins(), plan).join('\n'),
+    /contract source SHA must match test-plan.json/,
+  );
 });
 
 test('credential-shaped content is rejected', () => {
