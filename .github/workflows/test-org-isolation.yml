@@ -35,5 +35,6 @@ jobs:
         with:
           name: test-org-isolation-${{ github.sha }}
           path: .test-org-isolation/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
