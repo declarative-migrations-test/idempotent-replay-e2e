@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "namespace_prefix": "idempotent-replay-e2e-test",
+  "domain_suffix": "idempotent-replay-e2e.invalid",
+  "service_account_prefix": "idempotent-replay-e2e-test",
+  "storage_prefix": "test/idempotent-replay-e2e/",
+  "outbound_send_enabled": false,
+  "outbound_rate_limit_per_minute": 0,
+  "production_connectivity_enabled": false
+}
