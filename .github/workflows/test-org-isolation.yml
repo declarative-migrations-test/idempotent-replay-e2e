@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
           show-progress: false
       - name: Enforce test-only resource scope
-        uses: gha-indie-worker/.github/test-org-isolation@b7e439d0da484cd66be1f5666b2389e401a7526e
+        uses: gha-indie-worker/.github/test-org-isolation@ef0b0371f64e4532b8bbb5ecc51cf7c4d7c67b99
         with:
           root: .
           repository: ${{ github.repository }}
