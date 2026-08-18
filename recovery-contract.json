@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "declarative-migrations/declarative-postgres-migrate.rs",
+    "sha": "ff90a32bfddd09e22ab270b7a2e6f6deb7ac8304"
+  },
+  "databaseMatrix": ["16", "17"],
+  "requiredEvidence": [
+    "attemptId",
+    "migrationId",
+    "engine",
+    "engineVersion",
+    "exactSourceSha",
+    "planDigest",
+    "injectedFaultPoint",
+    "lockTransitions",
+    "finalSchemaDigest",
+    "planChecksum",
+    "leaseKey",
+    "leaseOwner",
+    "decision"
+  ],
+  "cases": [
+    {
+      "id": "crash-after-lock",
+      "category": "crash",
+      "injectionPoint": "after-lock-acquire",
+      "initialState": {"ledgerRows": 0, "lock": "owned", "checksum": "absent"},
+      "expected": {
+        "decision": "resume",
+        "exit": "retryable-failure",
+        "ledgerRows": 0,
+        "mayExecuteSql": true,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "crash-after-statement-before-ledger",
+      "category": "crash",
+      "injectionPoint": "after-statement-before-ledger",
+      "initialState": {"ledgerRows": 0, "lock": "owned", "checksum": "absent"},
+      "expected": {
+        "decision": "resume",
+        "exit": "retryable-failure",
+        "ledgerRows": 0,
+        "mayExecuteSql": true,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "crash-after-ledger-before-ack",
+      "category": "crash",
+      "injectionPoint": "after-ledger-before-ack",
+      "initialState": {"ledgerRows": 1, "lock": "owned", "checksum": "matching"},
+      "expected": {
+        "decision": "no-op",
+        "exit": "success",
+        "ledgerRows": 1,
+        "mayExecuteSql": false,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "foreign-active-lock",
+      "category": "lock",
+      "injectionPoint": "lease-acquire",
+      "initialState": {"ledgerRows": 0, "lock": "foreign-active", "checksum": "absent"},
+      "expected": {
+        "decision": "refuse",
+        "exit": "retryable-failure",
+        "ledgerRows": 0,
+        "mayExecuteSql": false,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-expired-lock",
+      "category": "lock",
+      "injectionPoint": "lease-recovery",
+      "initialState": {"ledgerRows": 0, "lock": "ambiguous-expired", "checksum": "absent"},
+      "expected": {
+        "decision": "refuse",
+        "exit": "terminal-failure",
+        "ledgerRows": 0,
+        "mayExecuteSql": false,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "checksum-drift",
+      "category": "drift",
+      "injectionPoint": "preflight",
+      "initialState": {"ledgerRows": 1, "lock": "owned", "checksum": "mismatched"},
+      "expected": {
+        "decision": "refuse",
+        "exit": "terminal-failure",
+        "ledgerRows": 1,
+        "mayExecuteSql": false,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    },
+    {
+      "id": "identical-replay",
+      "category": "replay",
+      "injectionPoint": "preflight",
+      "initialState": {"ledgerRows": 1, "lock": "owned", "checksum": "matching"},
+      "expected": {
+        "decision": "no-op",
+        "exit": "success",
+        "ledgerRows": 1,
+        "mayExecuteSql": false,
+        "requiresOwnershipProof": true,
+        "evidence": [
+          "attemptId", "migrationId", "engine", "engineVersion", "exactSourceSha",
+          "planDigest", "injectedFaultPoint", "lockTransitions", "finalSchemaDigest",
+          "planChecksum", "leaseKey", "leaseOwner", "decision"
+        ]
+      }
+    }
+  ]
+}
