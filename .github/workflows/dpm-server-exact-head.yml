@@ -1,0 +1,323 @@
+name: dpm-server exact-head certification
+
+on:
+  pull_request:
+    paths:
+      - "candidate-contract/**"
+      - ".github/actions/checkout-dpm-candidate/**"
+      - ".github/workflows/dpm-server-exact-head.yml"
+  push:
+    branches: [main]
+    paths:
+      - "candidate-contract/**"
+      - ".github/actions/checkout-dpm-candidate/**"
+      - ".github/workflows/dpm-server-exact-head.yml"
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Optional full 40-character declarative-postgres-migrate.rs commit SHA"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dpm-server-exact-head-${{ github.ref }}-${{ inputs.candidate_sha || 'pinned' }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      repository: ${{ steps.source.outputs.repository }}
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Resolve immutable source
+        id: source
+        env:
+          CANDIDATE_SHA_OVERRIDE: ${{ inputs.candidate_sha || '' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          with open("candidate-contract/dpm-server.json", encoding="utf-8") as stream:
+              source = json.load(stream)
+
+          repository = source.get("repository", "")
+          expected = "declarative-migrations/declarative-postgres-migrate.rs"
+          if repository != expected:
+              raise SystemExit(f"unsupported candidate repository: {repository!r}")
+
+          sha = os.environ.get("CANDIDATE_SHA_OVERRIDE", "").strip() or source.get("sha", "")
+          if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("candidate SHA must be exactly 40 lowercase hexadecimal characters")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"repository={repository}\n")
+              output.write(f"sha={sha}\n")
+
+          print(f"certifying {repository}@{sha}")
+          PY
+
+  formatting-evidence:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: stable
+          components: rustfmt
+      - name: Record immutable formatting evidence
+        working-directory: candidate
+        shell: bash
+        run: |
+          set +e
+          cargo fmt --all -- --check 2>&1 | tee "${RUNNER_TEMP}/formatting.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ ${status} -eq 0 ]]; then
+            echo "Immutable source is rustfmt-clean." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "::warning title=Immutable source is not rustfmt-clean::Reconstruction on current main must apply rustfmt without rewriting the historical branch."
+            echo "Immutable source is not rustfmt-clean; this is recorded evidence and does not mask execution checks." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+  historical-lockfile-evidence:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: stable
+      - name: Record historical lockfile coherence
+        working-directory: candidate
+        shell: bash
+        run: |
+          set +e
+          cargo check --locked --all-targets 2>&1 | tee "${RUNNER_TEMP}/historical-lockfile.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ ${status} -eq 0 ]]; then
+            echo "Historical Cargo.lock is coherent." >> "${GITHUB_STEP_SUMMARY}"
+          elif grep -q "cannot update the lock file" "${RUNNER_TEMP}/historical-lockfile.log"; then
+            echo "::warning title=Historical Cargo.lock is incoherent::The immutable lockfile cannot resolve the immutable manifest; fresh-resolution jobs test source behavior separately."
+            echo "Historical Cargo.lock is incoherent and must be regenerated during current-main reconstruction." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Historical lockfile check failed for an unexpected reason." >&2
+            exit "${status}"
+          fi
+
+  compiler-compatibility:
+    needs: resolve-source
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.88.0", "1.89.0", "1.90.0", "1.91.0", "stable"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: ${{ matrix.rust }}
+          fresh-resolution: "true"
+      - name: Check all targets with a fresh compatible resolution
+        working-directory: candidate
+        run: |
+          rustc --version
+          cargo check --locked --all-targets
+
+  unit-and-contract-tests:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: stable
+          fresh-resolution: "true"
+      - name: Run all unit and contract tests
+        working-directory: candidate
+        run: cargo test --locked --all-targets
+
+  strict-lint:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: stable
+          components: clippy
+          fresh-resolution: "true"
+      - name: Deny all warnings
+        working-directory: candidate
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  openapi-contract:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out immutable candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          ref: ${{ needs.resolve-source.outputs.sha }}
+          persist-credentials: false
+          show-progress: false
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ needs.resolve-source.outputs.sha }}
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}" && test -z "$(git status --porcelain)"
+      - name: Parse and inspect the versioned OpenAPI document
+        run: |
+          python3 -m json.tool openapi/dpm-server-v1.json >/dev/null
+          python3 - <<'PY'
+          import json
+
+          with open("openapi/dpm-server-v1.json", encoding="utf-8") as stream:
+              document = json.load(stream)
+
+          assert document["openapi"] == "3.1.0"
+          assert document["info"]["version"] == "1.0.0"
+          for path in ("/healthz", "/readyz", "/v1/version", "/v1/diff", "/v1/apply"):
+              assert path in document["paths"], path
+          assert document["components"]["securitySchemes"]["bearerAuth"] == {
+              "type": "http",
+              "scheme": "bearer",
+          }
+          PY
+
+  real-process-smoke:
+    needs: resolve-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out certification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          show-progress: false
+      - uses: ./.github/actions/checkout-dpm-candidate
+        with:
+          repository: ${{ needs.resolve-source.outputs.repository }}
+          sha: ${{ needs.resolve-source.outputs.sha }}
+          toolchain: stable
+          fresh-resolution: "true"
+      - name: Build the server
+        working-directory: candidate
+        run: cargo build --locked --bin dpm-server
+      - name: Exercise the real HTTP process
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          port="$(python3 - <<'PY'
+          import socket
+          with socket.socket() as listener:
+              listener.bind(("127.0.0.1", 0))
+              print(listener.getsockname()[1])
+          PY
+          )"
+          token='server-smoke-token-0123456789'
+          export DPM_SERVER_BIND="127.0.0.1:${port}"
+          export DPM_SERVER_TOKEN="${token}"
+          export DPM_SERVER_DATABASES_JSON='{"primary":"postgres://127.0.0.1:9/unused"}'
+          export DPM_SERVER_ALLOW_APPLY=false
+          target/debug/dpm-server >server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..50}; do
+            if curl --silent --fail "http://127.0.0.1:${port}/healthz" >health.json; then
+              break
+            fi
+            sleep 0.1
+          done
+
+          python3 - <<'PY'
+          import json
+          with open("health.json", encoding="utf-8") as stream:
+              health = json.load(stream)
+          assert health["status"] == "ok"
+          assert health["service"] == "dpm-server"
+          assert health["api_version"] == "v1"
+          PY
+
+          curl --silent --fail "http://127.0.0.1:${port}/openapi.json" >served-openapi.json
+          cmp openapi/dpm-server-v1.json served-openapi.json
+
+          cat >diff.json <<'JSON'
+          {
+            "source": {"kind": "catalog", "catalog": {"format_version": 1, "server_version_num": 0, "database_flavor": "postgres", "schemas": [], "extensions": [], "enums": {}, "sequences": {}, "tables": {}, "views": {}, "functions": {}, "triggers": {}}},
+            "target": {"kind": "catalog", "catalog": {"format_version": 1, "server_version_num": 0, "database_flavor": "postgres", "schemas": [], "extensions": [], "enums": {}, "sequences": {}, "tables": {}, "views": {}, "functions": {}, "triggers": {}}}
+          }
+          JSON
+
+          unauthenticated_status="$(curl --silent --output unauthenticated.json --write-out '%{http_code}' -H 'Content-Type: application/json' --data @diff.json "http://127.0.0.1:${port}/v1/diff")"
+          test "${unauthenticated_status}" = 401
+
+          curl --silent --fail -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data @diff.json "http://127.0.0.1:${port}/v1/diff" >diff-response.json
+          python3 - <<'PY'
+          import json
+          with open("diff-response.json", encoding="utf-8") as stream:
+              response = json.load(stream)
+          assert response["api_version"] == "v1"
+          assert response["summary"]["change_count"] == 0
+          assert response["plan"]["changes"] == []
+          PY
+
+          apply_status="$(curl --silent --output apply-disabled.json --write-out '%{http_code}' -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data '{"source":{"kind":"catalog","catalog":{"format_version":1,"server_version_num":0,"database_flavor":"postgres","schemas":[],"extensions":[],"enums":{},"sequences":{},"tables":{},"views":{},"functions":{},"triggers":{}}},"target":"primary","dry_run":false,"confirmation":"apply:primary"}' "http://127.0.0.1:${port}/v1/apply")"
+          test "${apply_status}" = 503
+          grep -q 'apply_disabled' apply-disabled.json
+      - name: Show server log on failure
+        if: failure()
+        working-directory: candidate
+        run: cat server.log 2>/dev/null || true
